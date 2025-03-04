@@ -109,7 +109,7 @@ def add_product():
         print("No suppliers available. Please add a supplier first.")
         return
 
-    print("Available Suppliers:")
+    print("\nAvailable Suppliers:")
     for supplier in suppliers:
         print(f"ID: {supplier[0]}, Name: {supplier[1]}")
 
@@ -139,7 +139,20 @@ def add_product():
 
 #Function for removing products
 def remove_product():
-    product_id = int(input("Enter the product ID to remove: "))
+    # Show available products before input
+    cursor.execute("SELECT product_id, name, quantity FROM product ORDER BY product_id ASC;")
+    products = cursor.fetchall()
+
+    if not products:
+        print("No products available.")
+        return
+
+    print("\nAvailable Products to remove:")
+    for product in products:
+        print(f"ID: {product[0]}, Name: {product[1]}, Quantity: {product[2]}")
+
+    # Get product ID and quantity to remove
+    product_id = int(input("\nEnter the product ID to remove: "))
     quantity_to_remove = int(input("Enter the quantity to remove: "))
 
     # Get the current quantity of the product
@@ -169,7 +182,7 @@ def list_suppliers_with_products():
     """)
     products = cursor.fetchall()
 
-    print("All products:")
+    print("\nAll products:")
     print("Order:")
     print("Supplier ID - Supplier Name - Product - Quantity - Price - Product ID")
     for product in products:
