@@ -58,6 +58,14 @@ def admin_menu():
             remove_product()
         elif choice == '4':
             list_suppliers_with_products()
+        elif choice == '5':
+            edit_product_quantity()
+        elif choice == '6':
+            add_discount()
+        elif choice == '7':
+            assign_discount()
+        elif choice == '8':
+            view_discount_history()
         elif choice == '0':
             break
         else:
@@ -187,6 +195,100 @@ def list_suppliers_with_products():
     print("Supplier ID - Supplier Name - Product - Quantity - Price - Product ID")
     for product in products:
         print(f"{product[0]} - {product[1]} - {product[2]} - {product[3]} - {product[4]:.2f} - {product[5]}")
+
+#Function lets the admin edit the current product quantity
+def edit_product_quantity():
+    # Show available products before input
+    cursor.execute("SELECT product_id, name, quantity FROM product ORDER BY product_id ASC;")
+    products = cursor.fetchall()
+
+    if not products:
+        print("No products available.")
+        return
+
+    print("\nAvailable Products:")
+    for product in products:
+        print(f"ID: {product[0]}, Name: {product[1]}, Quantity: {product[2]}")
+
+    # Get product ID and new quantity
+    product_id = int(input("Enter product ID: "))
+    new_quantity = int(input("Enter new product quantity: "))
+
+    # Update the quantity in the database
+    cursor.execute("UPDATE product SET quantity = %s WHERE product_id = %s", (new_quantity, product_id))
+    connection.commit()
+    print("Product quantity updated successfully.")
+
+
+#Function so admin can add new discounts
+def add_discount():
+    discount_id = input("Enter an id for the new discount: ")
+    code = input("Enter discount code: ")
+    percentage = float(input("Enter discount percentage: "))
+    reason = input("Enter discount reason: ")
+
+    cursor.execute("INSERT INTO discount (discount_id, code, percentage, reason) VALUES (%s, %s, %s, %s)", (discount_id, code, percentage, reason))
+    connection.commit()
+    print("Discount added successfully.")
+
+
+#Function so admin can assign a specific discount to a specific product
+def assign_discount():
+    # Show available products before input
+    cursor.execute("SELECT product_id, name FROM product ORDER BY product_id ASC;")
+    products = cursor.fetchall()
+
+    if not products:
+        print("No products available.")
+        return
+
+    print("\nAvailable Products:")
+    for product in products:
+        print(f"ID: {product[0]}, Name: {product[1]}")
+
+    # Show available discounts before input
+    cursor.execute("SELECT discount_id, code, percentage FROM discount ORDER BY discount_id ASC;")
+    discounts = cursor.fetchall()
+
+    if not discounts:
+        print("No discounts available. Please add a discount first.")
+        return
+
+    print("\nAvailable Discounts:")
+    for discount in discounts:
+        print(f"ID: {discount[0]}, Code: {discount[1]}, Percentage: {discount[2]}%")
+
+    # Get product ID and discount ID
+    product_id = int(input("\nEnter the product ID to assign discount: "))
+    discount_id = int(input("Enter the discount ID: "))
+    start_date = input("Enter start date (YYYY-MM-DD): ")
+    end_date = input("Enter end date (YYYY-MM-DD): ")
+
+    # Assign discount to product
+    cursor.execute("INSERT INTO product_discount (product_id, discount_id, start_date, end_date) VALUES (%s, %s, %s, %s)",
+                   (product_id, discount_id, start_date, end_date))
+    connection.commit()
+    print("Discount assigned successfully.")
+
+
+#Function so admin can check records of past applied discounts
+def view_discount_history():
+    cursor.execute("""
+        SELECT product_discount.start_date, product_discount.end_date, product.name, discount.code, discount.percentage
+        FROM product_discount
+        JOIN product ON product_discount.product_id = product.product_id
+        JOIN discount ON product_discount.discount_id = discount.discount_id
+        ORDER BY product_discount.start_date DESC;
+    """)
+    discount_history = cursor.fetchall()
+
+    if not discount_history:
+        print("No discount history found.")
+        return
+
+    print("\nDiscount History:")
+    for record in discount_history:
+        print(f"Start: {record[0]}, End: {record[1]}, Product: {record[2]}, Code: {record[3]}, Discount: {record[4]}%")
 
 
 # Run the program with function "main()"
