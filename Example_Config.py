@@ -1,3 +1,4 @@
+# Rename this file to "Config.py" to use it
 # Database configuration - Add your PostgreSQL credentials
 DB_HOST = "database_host"
 DB_NAME = "database_name"
