@@ -78,6 +78,9 @@ def admin_menu():
         
 #Customer menu with related functionalities
 def customer_menu():
+    customer_id = None  # Initialize customer_id to None
+    cart = {}
+    
     while True:
         print("\nCustomer Menu:")
         print("1. Register")
@@ -95,9 +98,34 @@ def customer_menu():
         if choice == '1':
             register_customer()
         elif choice == '2':
-            login_customer()
+            customer_id = login_customer()  # Store logged-in customer ID
         elif choice == '3':
             view_available_products()
+        elif choice == '4':
+            if customer_id is not None:
+                add_to_cart(customer_id, cart)
+            else:
+                print("Please log in first.")
+        elif choice == '5':
+            if customer_id is not None:
+                view_cart(cart)
+            else:
+                print("Please log in first.")
+        elif choice == '6':
+            if customer_id is not None:
+                place_order(customer_id, cart)
+            else:
+                print("Please log in first.")
+        elif choice == '7':
+            if customer_id is not None:
+                view_orders(customer_id)
+            else:
+                print("Please log in first.")
+        elif choice == '8':
+            if customer_id is not None:
+                delete_order(customer_id)
+            else:
+                print("Please log in first.")
         elif choice == '0':
             break
         else:
@@ -389,7 +417,7 @@ def login_customer():
         print("Invalid email or password.")
         return None
     
-#Lets the cusomers see what products are available
+#Function lets the cusomers see what products are available
 def view_available_products():
     cursor.execute("""
         SELECT supplier.supplier_id, supplier.name, product.product_id, product.name, 
@@ -415,6 +443,97 @@ def view_available_products():
     for product in products:
         print(f"{product[0]} - {product[1]} - {product[2]} - {product[3]} - {product[4]} - {product[5]:.2f} - {product[6]}%")
 
+
+#Function so customers can add products to shopping cart
+def add_to_cart(customer_id, cart):
+    product_id = int(input("Enter the product ID you want to add to the cart: "))
+    quantity = int(input("Enter the quantity you want to add: "))
+
+    cursor.execute("SELECT quantity FROM product WHERE product_id = %s", (product_id,))
+    available_quantity = cursor.fetchone()[0]
+
+    if quantity > available_quantity:
+        print("The requested quantity is not available.")
+        return
+
+    if product_id in cart:
+        cart[product_id] += quantity
+    else:
+        cart[product_id] = quantity
+
+    print("Product added to the cart.")
+
+
+#Function that lets the customer see their current shopping cart
+def view_cart(cart):
+    print("Cart:")
+    for product_id, quantity in cart.items():
+        cursor.execute("SELECT name, price FROM product WHERE product_id = %s", (product_id,))
+        product = cursor.fetchone()
+        print(f"ID: {product_id}, Name: {product[0]}, Quantity: {quantity}, Price: {product[1]} each.")
+
+
+#The function that places the order for the customer
+def place_order(customer_id, cart):
+    if not cart:
+        print("Your cart is empty.")
+        return
+
+    total_price = 0
+    for product_id, quantity in cart.items():
+        cursor.execute("SELECT price FROM product WHERE product_id = %s", (product_id,))
+        product_price = cursor.fetchone()[0]
+        total_price += product_price * quantity
+
+    print(f"Total price: {total_price}")
+    confirm = input("Do you want to place the order? (y/n) ")
+
+    if confirm.lower() == 'y':
+        cursor.execute("INSERT INTO orders (customer_id, total_price, order_date) VALUES (%s, %s, NOW())", (customer_id, total_price))
+        connection.commit()
+        cursor.execute("SELECT LASTVAL()")
+        order_id = cursor.fetchone()[0]
+
+        for product_id, quantity in cart.items():
+            cursor.execute("INSERT INTO order_item (order_id, product_id, quantity) VALUES (%s, %s, %s)", (order_id, product_id, quantity))
+            cursor.execute("UPDATE product SET quantity = quantity - %s WHERE product_id = %s", (quantity, product_id))
+            connection.commit()
+
+        cart.clear()
+        print("Order placed successfully.")
+    else:
+        print("Order not placed.")
+
+#Function that lets the customer see their orders
+def view_orders(customer_id):
+    cursor.execute("SELECT order_id, total_price, order_date, confirmed FROM orders WHERE customer_id = %s", (customer_id,))
+    orders = cursor.fetchall()
+
+    print("Your orders:")
+    for order in orders:
+        print(f"Order ID: {order[0]}, Total Price: {order[1]}, Order Date: {order[2]}, Confirmed: {order[3]}")
+
+#Function that lets the customer delete their unwanted order
+def delete_order(customer_id):
+    order_id = int(input("Enter the order ID you want to delete: "))
+    cursor.execute("SELECT confirmed FROM orders WHERE order_id = %s AND customer_id = %s", (order_id, customer_id))
+    result = cursor.fetchone()
+
+    if result is None:
+        print("The order does not exist or does not belong to you.")
+    elif result[0]:
+        print("The order is already confirmed and cannot be deleted.")
+    else:
+        cursor.execute("SELECT product_id, quantity FROM order_item WHERE order_id = %s", (order_id,))
+        order_items = cursor.fetchall()
+
+        for item in order_items:
+            cursor.execute("UPDATE product SET quantity = quantity + %s WHERE product_id = %s", (item[1], item[0]))
+
+        cursor.execute("DELETE FROM order_item WHERE order_id = %s", (order_id,))
+        cursor.execute("DELETE FROM orders WHERE order_id = %s", (order_id,))
+        connection.commit()
+        print("Order deleted successfully.")
 
 # Run the program with function "main()"
 main()
