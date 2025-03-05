@@ -49,7 +49,7 @@ def admin_menu():
         print("10. Decline an order")
         print("0. Exit")
 
-        choice = input("Enter your choice: ")
+        choice = input("\nEnter your choice: ")
         if choice == '1':
             add_supplier()
         elif choice == '2':
@@ -66,6 +66,10 @@ def admin_menu():
             assign_discount()
         elif choice == '8':
             view_discount_history()
+        elif choice == '9':
+            confirm_order()
+        elif choice == '10':
+            decline_order()
         elif choice == '0':
             break
         else:
@@ -88,12 +92,18 @@ def customer_menu():
 
         choice = input("Enter your choice: ")
 
-        if choice == '0':
+        if choice == '1':
+            register_customer()
+        elif choice == '2':
+            login_customer()
+        elif choice == '3':
+            view_available_products()
+        elif choice == '0':
             break
         else:
             print("Invalid input. Please try again.")
 
-#-----------Admin funtions--------------#
+#------------------------------------------------------------Admin functions------------------------------------------------------------#
 
 
 #Funtion for adding suppliers
@@ -289,6 +299,121 @@ def view_discount_history():
     print("\nDiscount History:")
     for record in discount_history:
         print(f"Start: {record[0]}, End: {record[1]}, Product: {record[2]}, Code: {record[3]}, Discount: {record[4]}%")
+
+
+#Function to confirm an order
+def confirm_order():
+    order_id = int(input("Enter the order ID you want to confirm: "))
+    
+    #Check if the order exists
+    cursor.execute("SELECT confirmed FROM orders WHERE order_id = %s", (order_id,))
+    result = cursor.fetchone()
+
+    if result is None:
+        print("The order does not exist.")
+        return
+
+    if result[0]:  #If order is already confirmed
+        print("The order is already confirmed.")
+        return
+
+    #Update order status to confirmed
+    cursor.execute("UPDATE orders SET confirmed = TRUE WHERE order_id = %s", (order_id,))
+    connection.commit()
+    
+    print("Order confirmed successfully.")
+
+
+#Function to decline an order
+def decline_order():
+    order_id = int(input("Enter the order ID you want to decline: "))
+
+    #Check if the order exists
+    cursor.execute("SELECT confirmed FROM orders WHERE order_id = %s", (order_id,))
+    result = cursor.fetchone()
+
+    if result is None:
+        print("The order does not exist.")
+        return
+
+    if result[0]:  #If order is already confirmed
+        print("The order is already confirmed and cannot be declined.")
+        return
+
+    #Retrieve products in the order to restore stock
+    cursor.execute("SELECT product_id, quantity FROM order_item WHERE order_id = %s", (order_id,))
+    order_items = cursor.fetchall()
+
+    for item in order_items:
+        cursor.execute("UPDATE product SET quantity = quantity + %s WHERE product_id = %s", (item[1], item[0]))
+
+    #Delete the order and its items
+    cursor.execute("DELETE FROM order_item WHERE order_id = %s", (order_id,))
+    cursor.execute("DELETE FROM orders WHERE order_id = %s", (order_id,))
+    connection.commit()
+
+    print("Order declined successfully.")
+
+
+#------------------------------------------------------------Customer functions------------------------------------------------------------#
+
+
+#Function to register a new customer
+def register_customer():
+    first_name = input("Enter your first name: ")
+    last_name = input("Enter your last name: ")
+    email = input("Enter your email: ")
+    address = input("Enter your address: ")
+    city = input("Enter your city: ")
+    country = input("Enter your country: ")
+    phone_number = input("Enter your phone number: ")
+    password = input("Enter your password: ")
+
+    cursor.execute("INSERT INTO customer (first_name, last_name, email, address, city, country, phone_number, password) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (first_name, last_name, email, address, city, country, phone_number, password))
+    connection.commit()
+    print("Registration successful.")
+
+
+#Function to log in a customer with email and password
+def login_customer():
+    email = input("Enter your email: ")
+    password = input("Enter your password: ")
+
+    cursor.execute("SELECT customer_id, first_name FROM customer WHERE email = %s AND password = %s", (email, password))
+    result = cursor.fetchone()
+
+    if result:
+        print(f"Welcome, {result[1]}!")
+        return result[0]  # Return the customer ID
+    else:
+        print("Invalid email or password.")
+        return None
+    
+#Lets the cusomers see what products are available
+def view_available_products():
+    cursor.execute("""
+        SELECT supplier.supplier_id, supplier.name, product.product_id, product.name, 
+               product.quantity, product.price, 
+               COALESCE(discount.percentage, 0) as discount_percentage
+        FROM product
+        JOIN supplier ON product.supplier_id = supplier.supplier_id
+        LEFT JOIN product_discount 
+            ON product.product_id = product_discount.product_id 
+            AND current_date BETWEEN product_discount.start_date AND product_discount.end_date
+        LEFT JOIN discount ON product_discount.discount_id = discount.discount_id
+        ORDER BY supplier.supplier_id ASC, product.product_id ASC;
+    """)
+    products = cursor.fetchall()
+
+    if not products:
+        print("No products available.")
+        return
+
+    print("\nAvailable Products:")
+    print("Supplier ID - Supplier Name - Product ID - Product Name - Quantity - Price - Discount (%)")
+
+    for product in products:
+        print(f"{product[0]} - {product[1]} - {product[2]} - {product[3]} - {product[4]} - {product[5]:.2f} - {product[6]}%")
 
 
 # Run the program with function "main()"
